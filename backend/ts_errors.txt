@@ -1,0 +1,22 @@
+src/queue/assignment.queue.ts(4,63): error TS2322: Type 'Redis' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'Cluster | Redis | ClusterOptions'.
+    Type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+      Types of property 'options' are incompatible.
+        Type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+          Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+            Types of property 'Connector' are incompatible.
+              Type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                Type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                  Type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                    Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.
+src/workers/assignment.worker.ts(24,5): error TS2322: Type 'Redis' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'Cluster | Redis | ClusterOptions'.
+    Type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+      Types of property 'options' are incompatible.
+        Type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+          Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+            Types of property 'Connector' are incompatible.
+              Type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                Type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                  Type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("C:/Dev/MyProjects/Assignment/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                    Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.
