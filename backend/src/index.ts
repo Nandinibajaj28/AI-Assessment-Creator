@@ -5,6 +5,7 @@ import http from "http";
 import { Server } from "socket.io";
 import { connectDB } from "./config/db";
 import assignmentRoutes from "./routes/assignment.routes";
+import authRoutes from "./routes/auth.routes";
 import { assignmentQueueEvents } from "./queues/assignment.queue";
 
 dotenv.config();
@@ -27,6 +28,7 @@ app.get("/", (req, res) => {
   res.send("API Running");
 });
 
+app.use("/api/auth", authRoutes);
 app.use("/api/assignment", assignmentRoutes);
 
 assignmentQueueEvents.on("completed", ({ jobId, returnvalue }: { jobId: string; returnvalue: any }) => {

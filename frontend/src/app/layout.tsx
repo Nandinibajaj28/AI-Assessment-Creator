@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppShell } from "@/components/assignment/shared/AppShell";
+import { AuthBootstrap } from "@/components/auth/AuthBootstrap";
+import { RouteGuard } from "@/components/auth/RouteGuard";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,7 +32,10 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
-        <AppShell>{children}</AppShell>
+        <AuthBootstrap />
+        <RouteGuard>
+          <AppShell>{children}</AppShell>
+        </RouteGuard>
       </body>
     </html>
   );

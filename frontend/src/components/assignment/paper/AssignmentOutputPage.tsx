@@ -3,10 +3,10 @@
 import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { AssignmentSidebar } from "@/components/assignment/shared/AssignmentSidebar";
 import { MobileHeader } from "@/components/assignment/paper/MobileHeader";
 import { AssignmentResult, Question } from "@/types/assignment";
 import { useAssignmentStore } from "@/store/useAssignmentStore";
+import { useAuthStore } from "@/store/useAuthStore";
 import { AnswerKey } from "@/components/assignment/paper/AnswerKey";
 import { ExamPaper } from "@/components/assignment/paper/ExamPaper";
 
@@ -35,6 +35,7 @@ export function AssignmentOutputPage({
   onRegenerate,
 }: AssignmentOutputPageProps) {
   const router = useRouter();
+  const user = useAuthStore((state) => state.user);
   const { schoolName, setHeader, subjectName, className, timeAllowed } = useAssignmentStore();
 
   const setSchoolName = (val: string) => setHeader({ schoolName: val, subjectName, className, timeAllowed });
@@ -68,19 +69,19 @@ export function AssignmentOutputPage({
   };
 
   return (
-    <main className="min-h-screen bg-[#f2f2f2] p-[8px] md:p-[10px]">
+    <main className="min-h-[calc(100vh-20px)]">
       <div className="mx-auto flex max-w-[1180px] gap-[8px] md:min-h-[calc(100vh-20px)]">
-        <div className="hidden md:block md:shrink-0">
-          <AssignmentSidebar />
-        </div>
-
         <section className="relative flex-1 overflow-hidden rounded-[18px] bg-[#d9d9d9] shadow-[0_18px_40px_rgba(0,0,0,0.08)]">
           <div className="md:hidden">
             <MobileHeader />
           </div>
 
           <div className="hidden md:block">
-            <DesktopTopBar onBack={handleBack} onRegenerate={handleRegenerate} />
+            <DesktopTopBar
+              onBack={handleBack}
+              onRegenerate={handleRegenerate}
+              userName={user?.name || "User"}
+            />
           </div>
 
           <div className="h-full overflow-y-auto px-[12px] pb-[14px] pt-[8px] md:px-[12px] md:pb-[18px] md:pt-[6px]">
@@ -141,7 +142,15 @@ export function AssignmentOutputPage({
   );
 }
 
-function DesktopTopBar({ onBack, onRegenerate }: { onBack: () => void; onRegenerate: () => void }) {
+function DesktopTopBar({
+  onBack,
+  onRegenerate,
+  userName,
+}: {
+  onBack: () => void;
+  onRegenerate: () => void;
+  userName: string;
+}) {
   return (
     <header className="px-[8px] pt-[8px]">
       <div className="flex h-[40px] items-center justify-between rounded-[14px] bg-white/82 px-5 shadow-[0_8px_24px_rgba(15,23,42,0.06)] backdrop-blur-sm">
@@ -172,9 +181,9 @@ function DesktopTopBar({ onBack, onRegenerate }: { onBack: () => void; onRegener
 
           <button type="button" className="flex items-center gap-[10px] text-[13px] font-medium">
             <span className="flex h-[25px] w-[25px] items-center justify-center overflow-hidden rounded-full bg-[#f4d9be] text-[14px]">
-              U
+              {userName.slice(0, 1).toUpperCase()}
             </span>
-            <span>User</span>
+            <span>{userName}</span>
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

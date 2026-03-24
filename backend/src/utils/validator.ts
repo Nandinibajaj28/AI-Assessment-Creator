@@ -130,10 +130,8 @@ export function validateStructure(data: unknown): asserts data is GeneratedAssig
         throw new Error(`Invalid question.marks at section ${sectionIndex} index ${questionIndex}`);
       }
 
-      if (typeof sourceLine !== "string" || sourceLine.trim().length === 0) {
-        throw new Error(
-          `Missing question.sourceLine at section ${sectionIndex} index ${questionIndex}`
-        );
+      if (sourceLine != null && typeof sourceLine !== "string") {
+        throw new Error(`Invalid question.sourceLine at section ${sectionIndex} index ${questionIndex}`);
       }
 
       if (/multiple choice/i.test(title)) {

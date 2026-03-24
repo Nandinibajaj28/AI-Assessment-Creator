@@ -16,6 +16,7 @@ export type AssignmentInput = {
   questionTypes?: AssignmentQuestionTypeInput[] | string[] | string;
   numberOfQuestions?: number;
   marks?: number;
+  additionalInfo?: string;
   instructions?: string;
   dueDate?: string;
   schoolName?: string;

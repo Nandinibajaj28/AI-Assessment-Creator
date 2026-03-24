@@ -1,5 +1,6 @@
 export const bullRedisConfig = {
   host: process.env.REDIS_HOST || "127.0.0.1",
   port: Number(process.env.REDIS_PORT) || 6379,
-  maxRetriesPerRequest: null
+  maxRetriesPerRequest: null,
+  connectTimeout: 5000
 };

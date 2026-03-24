@@ -2,7 +2,9 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuthStore } from "@/store/useAuthStore";
+import { useAssignmentStore } from "@/store/useAssignmentStore";
 
 type SidebarItem = {
   label: string;
@@ -13,14 +15,27 @@ type SidebarItem = {
 
 const primaryItems: SidebarItem[] = [
   { label: "Home", icon: <HomeIcon />, href: "/" },
-  { label: "My Groups", icon: <GroupsIcon /> },
   { label: "Assignments", icon: <AssignmentsIcon />, href: "/assignments" },
-  { label: "AI Teacher's Toolkit", icon: <ToolkitIcon /> },
-  { label: "My Library", icon: <LibraryIcon />, badge: "32" },
+  { label: "Create Assignment", icon: <PlusSparkleIcon />, href: "/create" },
 ];
 
 export function AssignmentSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const user = useAuthStore((state) => state.user);
+  const clearAuth = useAuthStore((state) => state.clearAuth);
+  const resetAssignments = useAssignmentStore((state) => state.resetAssignments);
+
+  function handleLogout() {
+    clearAuth();
+    resetAssignments();
+
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("veda-auth-token");
+    }
+
+    router.replace("/login");
+  }
 
   return (
     <aside className="w-full max-w-[236px] rounded-[14px] bg-white px-4 pb-4 pt-5 shadow-[0_14px_36px_rgba(15,23,42,0.12)]">
@@ -51,19 +66,19 @@ export function AssignmentSidebar() {
         ))}
       </nav>
 
-      <div className="mt-[156px]">
-        <SidebarNavItem item={{ label: "Settings", icon: <SettingsIcon /> }} active={false} />
+      <div className="mt-[220px]">
+        <SidebarNavItem item={{ label: "Logout", icon: <SettingsIcon /> }} active={false} onClick={handleLogout} />
 
         <div className="mt-3 rounded-[2px] border-[3px] border-[#7287b1] bg-[#f5f2ec] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-[#f2d7bd] text-[24px]">
-              <span>Teacher</span>
+              <span>{(user?.name || "U").slice(0, 1).toUpperCase()}</span>
             </div>
             <div className="min-w-0">
               <p className="truncate text-[15px] font-semibold leading-5 text-[#2f2f2f]">
-                Delhi Public School
+                {user?.name || "Teacher"}
               </p>
-              <p className="truncate text-[13px] leading-5 text-[#686868]">Bokaro Steel City</p>
+              <p className="truncate text-[13px] leading-5 text-[#686868]">{user?.email || "Signed in"}</p>
             </div>
           </div>
         </div>
@@ -72,7 +87,7 @@ export function AssignmentSidebar() {
   );
 }
 
-function SidebarNavItem({ item, active }: { item: SidebarItem; active: boolean }) {
+function SidebarNavItem({ item, active, onClick }: { item: SidebarItem; active: boolean; onClick?: () => void }) {
   const content = (
     <>
       <span className="flex min-w-0 items-center gap-[9px]">
@@ -109,7 +124,7 @@ function SidebarNavItem({ item, active }: { item: SidebarItem; active: boolean }
   }
 
   return (
-    <button type="button" className={className}>
+    <button type="button" onClick={onClick} className={className}>
       {content}
     </button>
   );
@@ -126,17 +141,6 @@ function HomeIcon() {
   );
 }
 
-function GroupsIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <path d="M4.6 6.1C5.70457 6.1 6.6 5.20457 6.6 4.1C6.6 2.99543 5.70457 2.1 4.6 2.1C3.49543 2.1 2.6 2.99543 2.6 4.1C2.6 5.20457 3.49543 6.1 4.6 6.1Z" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M9.8 5.5C10.6837 5.5 11.4 4.78366 11.4 3.9C11.4 3.01634 10.6837 2.3 9.8 2.3C8.91635 2.3 8.2 3.01634 8.2 3.9C8.2 4.78366 8.91635 5.5 9.8 5.5Z" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M1.8 11.4C2.25 9.82 3.4 8.9 4.9 8.9C6.4 8.9 7.55 9.82 8 11.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M8.3 10.95C8.63333 9.85 9.41667 9.2 10.65 9.2C11.2435 9.2 11.7725 9.35049 12.237 9.65147" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 function AssignmentsIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -144,25 +148,6 @@ function AssignmentsIcon() {
       <path d="M10 1.75V3.75H12" stroke="currentColor" strokeWidth="1.2" />
       <path d="M6 6H10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
       <path d="M6 8.5H10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ToolkitIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <path d="M3 1.75H11V12.25H3V1.75Z" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M4.75 4H9.25" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M4.75 6.25H9.25" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function LibraryIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <path d="M7 12.1C9.43005 12.1 11.4 10.1301 11.4 7.7C11.4 5.26995 9.43005 3.3 7 3.3C4.56995 3.3 2.6 5.26995 2.6 7.7C2.6 10.1301 4.56995 12.1 7 12.1Z" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M7 2V7.7H10.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   );
 }

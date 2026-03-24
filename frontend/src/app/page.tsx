@@ -1,6 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { useAuthStore } from "@/store/useAuthStore";
 
 export default function HomePage() {
+  const user = useAuthStore((state) => state.user);
+
   return (
     <section className="min-h-[calc(100vh-20px)] overflow-hidden rounded-[18px] bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.94)_0%,_rgba(237,237,237,0.96)_38%,_#d9d9d9_100%)] shadow-[0_18px_40px_rgba(0,0,0,0.08)]">
       <div className="flex h-full min-h-[calc(100vh-20px)] flex-col justify-center px-6 py-12 sm:px-10">
@@ -9,7 +14,7 @@ export default function HomePage() {
             AI Assignment Creator
           </p>
           <h1 className="mt-4 text-[40px] font-semibold tracking-[-0.06em] text-[#262626] sm:text-[56px]">
-            Build, generate, and manage assignments in one clean workflow.
+            Welcome back{user?.name ? `, ${user.name}` : ""}. Build, generate, and manage assignments in one clean workflow.
           </h1>
           <p className="mt-4 max-w-[500px] text-[15px] leading-[1.7] text-[#666666]">
             Start from your assignments dashboard, create a new assignment, review the generated paper, and return to an updated list instantly.

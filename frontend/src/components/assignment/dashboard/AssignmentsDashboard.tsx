@@ -6,6 +6,7 @@ import { formatDisplayDate } from "@/lib/format";
 import { getSocket } from "@/lib/socket";
 import { deleteAssignment, getAssignments } from "@/services/api";
 import { useAssignmentStore } from "@/store/useAssignmentStore";
+import { useAuthStore } from "@/store/useAuthStore";
 import AssignmentGrid from "@/components/assignment/dashboard/AssignmentGrid";
 import EmptyState from "@/components/assignment/dashboard/EmptyState";
 import FloatingButton from "@/components/assignment/dashboard/FloatingButton";
@@ -14,6 +15,7 @@ export default function AssignmentsDashboard() {
   const router = useRouter();
   const menuContainerRef = useRef<HTMLDivElement | null>(null);
   const { assignments, setAssignments, removeAssignment } = useAssignmentStore();
+  const user = useAuthStore((state) => state.user);
   const [search, setSearch] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -123,9 +125,9 @@ export default function AssignmentsDashboard() {
 
           <button type="button" className="flex items-center gap-[10px] text-[13px] font-medium">
             <span className="flex h-[25px] w-[25px] items-center justify-center overflow-hidden rounded-full bg-[#f4d9be] text-[14px]">
-              U
+              {(user?.name || "U").slice(0, 1).toUpperCase()}
             </span>
-            <span>John Doe</span>
+            <span>{user?.name || "User"}</span>
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

@@ -6,10 +6,13 @@ import { AssignmentSidebar } from "@/components/assignment/shared/AssignmentSide
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const isAuthRoute = pathname === "/login" || pathname === "/signup";
   const showSidebar =
-    pathname === "/" ||
-    pathname.startsWith("/assignments") ||
-    pathname.startsWith("/create");
+    !isAuthRoute &&
+    (pathname === "/" ||
+      pathname.startsWith("/assignments") ||
+      pathname.startsWith("/create") ||
+      pathname.startsWith("/assignment/"));
 
   if (!showSidebar) {
     return <>{children}</>;

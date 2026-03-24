@@ -5,6 +5,7 @@ import { Worker } from "bullmq";
 import { bullRedisConfig } from "../config/redis";
 import { connectDB } from "../config/db";
 import { Assignment } from "../models/assignment.model";
+import { getLocalAssignmentById, isMongoConnected, updateLocalAssignment } from "../services/local-data.service";
 import { processAssignmentGeneration } from "../services/assignment-generation.service";
 
 connectDB();
@@ -34,7 +35,9 @@ const worker = new Worker(
 
     try {
       const result = await processAssignmentGeneration(String(assignmentId), data);
-      const assignment = await Assignment.findById(String(assignmentId)).lean();
+      const assignment = isMongoConnected()
+        ? await Assignment.findById(String(assignmentId)).lean()
+        : getLocalAssignmentById(String(assignmentId));
       console.log(`[Worker] Job completed for assignment ${assignmentId}`);
       return {
         assignmentId,
@@ -54,16 +57,28 @@ const worker = new Worker(
       };
 
       try {
-        await Assignment.findByIdAndUpdate(String(assignmentId), {
-          status: "completed",
-          errorMessage: message,
-          result: FALLBACK_RESULT
-        });
+        if (isMongoConnected()) {
+          await Assignment.findByIdAndUpdate(String(assignmentId), {
+            status: "completed",
+            errorMessage: message,
+            result: FALLBACK_RESULT
+          });
+        } else {
+          updateLocalAssignment(String(assignmentId), (assignment) => ({
+            ...assignment,
+            status: "completed",
+            errorMessage: message,
+            result: FALLBACK_RESULT,
+            updatedAt: new Date().toISOString()
+          }));
+        }
       } catch (dbError) {
         console.error(`[Worker] DB update failed:`, dbError);
       }
 
-      const assignment = await Assignment.findById(String(assignmentId)).lean();
+      const assignment = isMongoConnected()
+        ? await Assignment.findById(String(assignmentId)).lean()
+        : getLocalAssignmentById(String(assignmentId));
       return {
         assignmentId,
         result: FALLBACK_RESULT,

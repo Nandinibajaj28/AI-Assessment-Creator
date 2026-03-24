@@ -16,6 +16,7 @@ type AssignmentState = {
   setAssignments: (assignments: DashboardAssignment[]) => void;
   addAssignment: (assignment: DashboardAssignment) => void;
   removeAssignment: (id: string) => void;
+  resetAssignments: () => void;
   setHeader: (header: { schoolName: string; subjectName: string; className: string; timeAllowed: string }) => void;
 };
 
@@ -40,5 +41,15 @@ export const useAssignmentStore = create<AssignmentState>((set) => ({
     set((state) => ({
       assignments: state.assignments.filter((assignment) => assignment.id !== id),
     })),
+  resetAssignments: () =>
+    set({
+      assignmentId: null,
+      result: null,
+      assignments: [],
+      schoolName: "",
+      subjectName: "",
+      className: "",
+      timeAllowed: "",
+    }),
   setHeader: (header) => set({ ...header }),
 }));

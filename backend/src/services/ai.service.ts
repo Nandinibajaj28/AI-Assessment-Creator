@@ -1,6 +1,6 @@
 import pdfParse from "pdf-parse";
 import Tesseract from "tesseract.js";
-import { AssignmentInput, buildPrompt, normalizeAssignmentConfig } from "./prompt.service";
+import { AssignmentInput, normalizeAssignmentConfig } from "./prompt.service";
 import {
   GeneratedAssignment,
   GeneratedQuestion,
@@ -18,10 +18,10 @@ const DEFAULT_FALLBACK_ASSIGNMENT: GeneratedAssignment = {
       instruction: "Attempt all questions",
       questions: [
         {
-          text: "What fact is directly stated in the provided material?",
+          text: "Define the core concept related to the subject and provide one suitable example.",
           difficulty: "easy",
           marks: 2,
-          sourceLine: "No source text was extracted from the uploaded material."
+          sourceLine: "Core concept from the selected subject"
         }
       ]
     }
@@ -55,12 +55,114 @@ const cleanVisibleText = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const normalizeExtractedText = (value: string) =>
+  value
+    .split(/\r?\n/)
+    .map((line) => cleanVisibleText(line))
+    .filter((line) => line.length > 0)
+    .join("\n")
+    .trim();
+
 const normalizeLine = (value: string) =>
   value
     .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
     .replace(/["'`]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+
+const STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "be",
+  "by",
+  "for",
+  "from",
+  "how",
+  "in",
+  "into",
+  "is",
+  "it",
+  "of",
+  "on",
+  "or",
+  "that",
+  "the",
+  "their",
+  "this",
+  "to",
+  "what",
+  "which",
+  "who",
+  "why",
+  "with"
+]);
+
+const tokenizeMeaningfulWords = (value: string) =>
+  normalizeLine(value)
+    .split(" ")
+    .filter((token) => token.length >= 4 && !STOP_WORDS.has(token));
+
+const countSharedTokens = (left: string, right: string) => {
+  const leftTokens = new Set(tokenizeMeaningfulWords(left));
+  const rightTokens = new Set(tokenizeMeaningfulWords(right));
+
+  let count = 0;
+  for (const token of leftTokens) {
+    if (rightTokens.has(token)) {
+      count += 1;
+    }
+  }
+
+  return count;
+};
+
+const findMatchingSourceLine = (sourceLine: string, sourceLines: string[]) => {
+  const normalizedSourceLine = normalizeLine(sourceLine);
+  if (!normalizedSourceLine) {
+    return "";
+  }
+
+  const exactMatch = sourceLines.find((line) => normalizeLine(line) === normalizedSourceLine);
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  return (
+    sourceLines.find((line) => {
+      const normalizedLine = normalizeLine(line);
+      return (
+        normalizedLine.includes(normalizedSourceLine) || normalizedSourceLine.includes(normalizedLine)
+      );
+    }) || ""
+  );
+};
+
+const isQuestionRelatedToContext = (
+  questionText: string,
+  sourceLine: string,
+  sourceLines: string[],
+  fullContext: string
+) => {
+  if (sourceLines.length === 0) {
+    return true;
+  }
+
+  const matchedSourceLine = findMatchingSourceLine(sourceLine, sourceLines);
+  if (!matchedSourceLine) {
+    return false;
+  }
+
+  if (countSharedTokens(questionText, matchedSourceLine) >= 1) {
+    return true;
+  }
+
+  return countSharedTokens(questionText, fullContext) >= 2;
+};
 
 const extractUploadedDocument = (data: AssignmentGenerationInput) =>
   data.uploadedFile ?? data.uploadedImage;
@@ -115,7 +217,9 @@ const normalizeOptions = (value: unknown) => {
 const sanitizeQuestion = (
   question: unknown,
   sectionTitle: string,
-  marks: number
+  marks: number,
+  sourceLines: string[],
+  fullContext: string
 ): GeneratedQuestion | null => {
   if (!question || typeof question !== "object") {
     return null;
@@ -124,10 +228,16 @@ const sanitizeQuestion = (
   const raw = question as Record<string, unknown>;
   const text = cleanVisibleText(String(raw.text ?? ""));
   const difficulty = String(raw.difficulty ?? "").trim().toLowerCase();
-  const sourceLine = cleanVisibleText(String(raw.sourceLine ?? raw.source_line ?? raw.source ?? ""));
+  const sourceLine =
+    cleanVisibleText(String(raw.sourceLine ?? raw.source_line ?? raw.source ?? text)) ||
+    "Relevant concept from the selected subject";
   const options = normalizeOptions(raw.options);
 
-  if (!text || !sourceLine || containsForbiddenText(text)) {
+  if (!text || containsForbiddenText(text)) {
+    return null;
+  }
+
+  if (!isQuestionRelatedToContext(text, sourceLine, sourceLines, fullContext)) {
     return null;
   }
 
@@ -150,7 +260,9 @@ const sanitizeQuestion = (
 
 const sanitizeAssignment = (
   assignment: unknown,
-  config: ReturnType<typeof normalizeAssignmentConfig>
+  config: ReturnType<typeof normalizeAssignmentConfig>,
+  sourceLines: string[],
+  fullContext: string
 ): GeneratedAssignment => {
   if (!assignment || typeof assignment !== "object") {
     return { sections: [] };
@@ -176,52 +288,21 @@ const sanitizeAssignment = (
       title: questionType.normalizedType,
       instruction: "Attempt all questions",
       questions: rawQuestions
-        .map((question) => sanitizeQuestion(question, questionType.normalizedType, questionType.marks))
+        .map((question) =>
+          sanitizeQuestion(
+            question,
+            questionType.normalizedType,
+            questionType.marks,
+            sourceLines,
+            fullContext
+          )
+        )
         .filter((question): question is GeneratedQuestion => Boolean(question))
     };
   });
 
   return { sections };
 };
-
-const isQuestionMeaningful = (text: string) => {
-  const normalized = cleanVisibleText(text);
-
-  if (normalized.length < 12) {
-    return false;
-  }
-
-  if (containsForbiddenText(normalized)) {
-    return false;
-  }
-
-  return /[?]|(explain|state|define|calculate|solve|draw|compare|differentiate|describe|write|which|what)/i.test(
-    normalized
-  );
-};
-
-const isSourceSupported = (sourceLine: string, sourceLines: string[]) => {
-  const normalizedSource = normalizeLine(sourceLine);
-
-  return sourceLines.some((candidate) => {
-    const normalizedCandidate = normalizeLine(candidate);
-    return (
-      normalizedCandidate === normalizedSource ||
-      normalizedCandidate.includes(normalizedSource) ||
-      normalizedSource.includes(normalizedCandidate)
-    );
-  });
-};
-
-const filterUnsupportedQuestions = (assignment: GeneratedAssignment, sourceLines: string[]) => ({
-  sections: assignment.sections.map((section) => ({
-    ...section,
-    questions: section.questions.filter(
-      (question) =>
-        isQuestionMeaningful(question.text) && isSourceSupported(question.sourceLine, sourceLines)
-    )
-  }))
-});
 
 const buildDistractors = (correctLine: string, sourceLines: string[]) => {
   const distractors = sourceLines
@@ -262,7 +343,7 @@ const buildFallbackQuestion = ({
   }
 
   return {
-    text: `According to the uploaded material, what fact is stated about \"${clippedLine}\"?`,
+    text: `Explain ${clippedLine} in a concise academic answer.`,
     difficulty: buildDifficulty(index),
     marks,
     sourceLine
@@ -281,15 +362,16 @@ const buildGroundedFallbackAssignment = (
     sourceLines.length > 0
       ? sourceLines
       : [
-          cleanVisibleText(
-            [
-              data.subjectName && `Subject: ${data.subjectName}`,
-              data.instructions && `Instruction: ${data.instructions}`
-            ]
-              .filter(Boolean)
-              .join(" | ")
-          ) || "No source text was extracted from the uploaded material."
-        ];
+        cleanVisibleText(
+          [
+            data.subjectName && `Subject: ${data.subjectName}`,
+            data.additionalInfo && `Additional Info: ${data.additionalInfo}`,
+            data.instructions && `Instruction: ${data.instructions}`
+          ]
+            .filter(Boolean)
+            .join(" | ")
+        ) || `${data.subjectName || "Selected subject"} subject academic questions`
+      ];
 
   if (config.questionTypes.length === 0) {
     return DEFAULT_FALLBACK_ASSIGNMENT;
@@ -370,12 +452,12 @@ const parseDataUrlToBuffer = (dataUrl?: string) => {
 
 const extractTextFromPdf = async (buffer: Buffer) => {
   const parsed = await pdfParse(buffer);
-  return cleanVisibleText(parsed.text || "");
+  return normalizeExtractedText(parsed.text || "");
 };
 
 const extractTextFromImage = async (buffer: Buffer) => {
   const result = await Tesseract.recognize(buffer, "eng");
-  return cleanVisibleText(result.data.text || "");
+  return normalizeExtractedText(result.data.text || "");
 };
 
 const extractDocumentText = async (data: AssignmentGenerationInput) => {
@@ -402,6 +484,10 @@ const extractDocumentText = async (data: AssignmentGenerationInput) => {
       ? await extractTextFromPdf(parsedFile.buffer)
       : await extractTextFromImage(parsedFile.buffer);
 
+    if (mimeType === "application/pdf") {
+      console.log("PDF RAW TEXT:", extractedText.slice(0, 300));
+    }
+
     if (!extractedText) {
       throw new Error(`${EXTRACTION_FAILURE_PREFIX} no readable text was found in the uploaded file.`);
     }
@@ -424,31 +510,84 @@ const extractTextFromOpenAIResponse = (response: any) => {
   const textParts = response.output.flatMap((item: any) =>
     Array.isArray(item?.content)
       ? item.content
-          .map((contentItem: any) => {
-            if (typeof contentItem?.text === "string") {
-              return contentItem.text.trim();
-            }
+        .map((contentItem: any) => {
+          if (typeof contentItem?.text === "string") {
+            return contentItem.text.trim();
+          }
 
-            if (typeof contentItem?.output_text === "string") {
-              return contentItem.output_text.trim();
-            }
+          if (typeof contentItem?.output_text === "string") {
+            return contentItem.output_text.trim();
+          }
 
-            return "";
-          })
-          .filter(Boolean)
+          return "";
+        })
+        .filter(Boolean)
       : []
   );
 
   return textParts.join("\n").trim();
 };
 
-const buildStrictPrompt = (data: AssignmentGenerationInput) => `
-${buildPrompt(data)}
+const buildStrictPrompt = (data: AssignmentGenerationInput, limitedText: string) => {
+  const config = normalizeAssignmentConfig(data);
+  const fallbackSubject = data.subjectName || "the selected subject";
+  const contextBlock = limitedText || `[EMPTY_CONTEXT] Fallback to subject: ${fallbackSubject}`;
 
-Return ONLY valid JSON.
-Do not include explanation.
-Do not include markdown.
+  return `
+You are an expert school exam paper setter.
+
+Context:
+${contextBlock}
+
+RULES:
+
+- Generate questions ONLY from this context
+- Do NOT use external knowledge
+- Do NOT generate unrelated topics
+- If context is empty -> fallback to subject
+- Follow question count exactly
+- Keep section titles, marks, and difficulty aligned to the request
+- For Multiple Choice Questions, include at least 3 options
+
+Return ONLY valid JSON:
+
+{
+  "sections": [
+    {
+      "title": "Multiple Choice Questions",
+      "instruction": "Attempt all questions",
+      "questions": [
+        {
+          "text": "Actual academic question",
+          "difficulty": "easy",
+          "marks": 2,
+          "sourceLine": "relevant concept",
+          "options": ["A", "B", "C", "D"]
+        }
+      ]
+    }
+  ]
+}
+
+Additional requirements:
+- Every question must be grounded in the context block above
+- Every "sourceLine" must be copied from the provided context
+- Create exactly ${config.questionTypes.length} sections
+- Each section title must exactly match the requested question type label
+- Each section instruction must be exactly "Attempt all questions"
+- Total number of questions must be exactly ${config.numberOfQuestions}
+- Total marks must be exactly ${config.totalMarks}
+- Difficulty must be exactly one of: easy, medium, hard
+- ${config.questionTypes
+    .map(
+      (questionType) =>
+        `"${questionType.normalizedType}" must contain exactly ${questionType.count} question(s), each worth ${questionType.marks} mark${
+          questionType.marks === 1 ? "" : "s"
+        }.`
+    )
+    .join("\n- ")}
 `.trim();
+};
 
 const callOpenAI = async (prompt: string) => {
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -490,7 +629,8 @@ const callOllama = async (prompt: string) => {
     body: JSON.stringify({
       model: OLLAMA_MODEL,
       prompt,
-      stream: false
+      stream: false,
+      format: "json"
     })
   });
 
@@ -504,25 +644,28 @@ const callOllama = async (prompt: string) => {
 
 const tryParseAssignment = (
   rawText: string,
-  config: ReturnType<typeof normalizeAssignmentConfig>
+  config: ReturnType<typeof normalizeAssignmentConfig>,
+  sourceLines: string[],
+  fullContext: string
 ): GeneratedAssignment => {
   const sanitized = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
 
   try {
-    return sanitizeAssignment(JSON.parse(sanitized), config);
+    return sanitizeAssignment(JSON.parse(sanitized), config, sourceLines, fullContext);
   } catch {
     const jsonSubstringMatch = sanitized.match(/\{[\s\S]*\}/);
     if (!jsonSubstringMatch) {
       throw new Error("Unable to extract JSON substring from AI response");
     }
 
-    return sanitizeAssignment(JSON.parse(jsonSubstringMatch[0]), config);
+    return sanitizeAssignment(JSON.parse(jsonSubstringMatch[0]), config, sourceLines, fullContext);
   }
 };
 
 export const generateQuestions = async (data: unknown): Promise<GeneratedAssignment> => {
   const input = data as AssignmentGenerationInput;
   const uploadedDocument = extractUploadedDocument(input);
+  const DEBUG_MODE = false;
 
   try {
     console.log("[AI] Starting grounded generation pipeline", {
@@ -533,37 +676,68 @@ export const generateQuestions = async (data: unknown): Promise<GeneratedAssignm
     let extractedText = "";
     try {
       extractedText = await extractDocumentText(input);
+      console.log("EXTRACTED TEXT:", extractedText.slice(0, 200));
+      console.log("========== EXTRACTION DEBUG ==========");
+      console.log("File Info:", {
+        hasFile: !!uploadedDocument,
+        mimeType: uploadedDocument?.mimeType,
+      });
+      console.log("Data URL Preview:", uploadedDocument?.dataUrl?.slice(0, 100));
+      console.log("Extracted Text Length:", extractedText.length);
+      console.log("Extracted Text Preview:", extractedText.slice(0, 500));
+      if (!extractedText) {
+        console.warn("⚠️ EXTRACTION FAILED — NO TEXT FOUND");
+      }
+      console.log("======================================");
     } catch (extractionError) {
       const extractionMessage = toErrorMessage(extractionError);
       console.warn("[AI] Text extraction failed, proceeding with metadata only:", extractionMessage);
       // We don't throw anymore. We let it proceed to allow LLM to generate based on subject/class.
       // We can also inject a hint into the instructions.
+      console.log("========== EXTRACTION DEBUG ==========");
+      console.log("File Info:", {
+        hasFile: !!uploadedDocument,
+        mimeType: uploadedDocument?.mimeType,
+      });
+      console.log("Data URL Preview:", uploadedDocument?.dataUrl?.slice(0, 100));
+      console.log("Extracted Text Length:", extractedText.length);
+      console.log("Extracted Text Preview:", extractedText.slice(0, 500));
+      console.warn("⚠️ EXTRACTION FAILED — NO TEXT FOUND");
+      console.log("======================================");
+    }
+
+    if (DEBUG_MODE) {
+      console.log("[AI DEBUG MODE] Extracted content:", extractedText || "NO TEXT EXTRACTED");
     }
 
     const preparedInput: AssignmentGenerationInput = {
       ...input,
-      extractedText
+      extractedText:
+        extractedText ||
+        input.additionalInfo ||
+        input.instructions ||
+        `${input.subjectName || "Selected subject"} subject academic questions`
     };
 
-    const sourceLines = extractGroundingLines(extractedText);
-    
-    // If we have an uploaded document but no source lines (failed extraction or empty file)
-    // We still try to call the LLM, but we acknowledge the grounding will be missing.
-    const prompt = buildStrictPrompt(preparedInput);
+    const limitedText = (preparedInput.extractedText || "").slice(0, 2000);
+    const sourceLines = extractGroundingLines(limitedText);
+
+    const prompt = buildStrictPrompt(preparedInput, limitedText);
     const rawResponse = process.env.OPENAI_API_KEY ? await callOpenAI(prompt) : await callOllama(prompt);
-    
+
+    console.log("[AI DEBUG]", {
+      extractedText: preparedInput.extractedText,
+      prompt,
+      rawResponse
+    });
+
     if (!rawResponse) {
       throw new Error("LLM response content was empty");
     }
 
     const config = normalizeAssignmentConfig(preparedInput);
-    const parsed = tryParseAssignment(rawResponse, config);
-    
-    // If extraction was successful, we filter by source lines.
-    // If it failed, sourceLines is empty, so we just use the parsed ones as-is (non-grounded).
-    const supportedOnly = sourceLines.length > 0 
-      ? filterUnsupportedQuestions(parsed, sourceLines)
-      : parsed;
+    const parsed = tryParseAssignment(rawResponse, config, sourceLines, limitedText);
+    const supportedOnly = parsed;
 
     const completed = completeAssignmentWithFallback(supportedOnly, preparedInput, sourceLines);
 

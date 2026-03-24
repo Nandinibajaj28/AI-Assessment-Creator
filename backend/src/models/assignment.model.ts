@@ -9,8 +9,23 @@ const questionTypeSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const uploadedDocumentSchema = new mongoose.Schema(
+  {
+    name: String,
+    mimeType: String,
+    dataUrl: String
+  },
+  { _id: false }
+);
+
 const assignmentSchema = new mongoose.Schema(
   {
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: false,
+      index: true
+    },
     schoolName: String,
     subjectName: String,
     className: String,
@@ -20,6 +35,8 @@ const assignmentSchema = new mongoose.Schema(
     numberOfQuestions: Number,
     marks: Number,
     instructions: String,
+    uploadedFile: uploadedDocumentSchema,
+    uploadedImage: uploadedDocumentSchema,
 
     status: {
       type: String,
