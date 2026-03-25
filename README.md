@@ -53,13 +53,11 @@ Upload File → Extract Text → Build Prompt → AI Generation → Validate →
 - BullMQ
 - Redis
 
----
-
-## 📂 Project Structure
+##  Project Structure
 /frontend /backend ├── controllers ├── services ├── utils ├── queue ├── config
 
 
-## 🛡️ Key Design Decisions
+## Key Design Decisions
 
 - **Structured Prompt Engineering**  
   Ensures AI generates consistent and relevant questions
@@ -72,8 +70,6 @@ Upload File → Extract Text → Build Prompt → AI Generation → Validate →
 
 - **Queue-Based Processing (BullMQ)**  
   Handles AI generation asynchronously to avoid API blocking
-
----
 
 ## 🎯 Future Improvements
 
