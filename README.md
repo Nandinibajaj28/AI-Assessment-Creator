@@ -1,4 +1,4 @@
-# AI Assignment Generator
+  # AI Assessment Creator
 
 An AI-powered web application that generates structured academic assignments from uploaded PDFs or images.  
 The system ensures reliable and consistent output using prompt engineering, validation, and fallback mechanisms.
