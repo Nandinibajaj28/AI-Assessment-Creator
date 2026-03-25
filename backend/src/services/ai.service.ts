@@ -241,7 +241,7 @@ const normalizeOptions = (value: unknown) => {
   }
 
   const options = value
-    .map((option) => cleanVisibleText(String(option ?? "")))
+    .map((option) => String(option ?? "").trim())
     .filter((option) => option.length > 0);
 
   return options.length >= 3 ? options : undefined;
@@ -250,29 +250,24 @@ const normalizeOptions = (value: unknown) => {
 const sanitizeQuestion = (
   question: unknown,
   sectionTitle: string,
-  marks: number,
-  sourceLines: string[],
-  fullContext: string
+  fallbackMarks: number,
+  fallbackDifficulty: GeneratedQuestion["difficulty"]
 ): GeneratedQuestion | null => {
   if (!question || typeof question !== "object") {
     return null;
   }
 
   const raw = question as Record<string, unknown>;
-  const text = cleanVisibleText(String(raw.text ?? ""));
-  const difficulty = String(raw.difficulty ?? "").trim().toLowerCase();
-  const sourceLine = cleanVisibleText(String(raw.sourceLine ?? raw.source_line ?? raw.source ?? ""));
+  const text = String(raw.text ?? "").trim();
+  const difficultyValue = String(raw.difficulty ?? "").trim().toLowerCase();
+  const difficulty = ["easy", "medium", "hard"].includes(difficultyValue)
+    ? (difficultyValue as GeneratedQuestion["difficulty"])
+    : fallbackDifficulty;
   const options = normalizeOptions(raw.options);
+  const marksValue = Number(raw.marks);
+  const marks = Number.isFinite(marksValue) && marksValue > 0 ? marksValue : fallbackMarks;
 
-  if (!text || containsForbiddenText(text)) {
-    return null;
-  }
-
-  if (!isQuestionRelatedToContext(text, sourceLine || text, sourceLines, fullContext)) {
-    return null;
-  }
-
-  if (!["easy", "medium", "hard"].includes(difficulty)) {
+  if (!text) {
     return null;
   }
 
@@ -282,7 +277,7 @@ const sanitizeQuestion = (
 
   return {
     text,
-    difficulty: difficulty as GeneratedQuestion["difficulty"],
+    difficulty,
     marks,
     ...(options ? { options } : {})
   };
@@ -290,9 +285,7 @@ const sanitizeQuestion = (
 
 const sanitizeAssignment = (
   assignment: unknown,
-  config: ReturnType<typeof normalizeAssignmentConfig>,
-  sourceLines: string[],
-  fullContext: string
+  config: ReturnType<typeof normalizeAssignmentConfig>
 ): GeneratedAssignment => {
   if (!assignment || typeof assignment !== "object") {
     return { sections: [] };
@@ -302,34 +295,40 @@ const sanitizeAssignment = (
     ? ((assignment as Record<string, unknown>).sections as unknown[])
     : [];
 
-  const sections = config.questionTypes.map<GeneratedSection>((questionType) => {
-    const matchingSection = rawSections.find((section) => {
+  const sections = rawSections
+    .map((section, sectionIndex) => {
       if (!section || typeof section !== "object") {
-        return false;
+        return null;
       }
 
-      const title = String((section as Record<string, unknown>).title ?? "");
-      return title.trim().toLowerCase() === questionType.normalizedType.trim().toLowerCase();
-    }) as Record<string, unknown> | undefined;
+      const rawSection = section as Record<string, unknown>;
+      const matchingQuestionType =
+        config.questionTypes.find(
+          (questionType) =>
+            String(rawSection.title ?? "").trim().toLowerCase() ===
+            questionType.normalizedType.trim().toLowerCase()
+        ) ?? config.questionTypes[sectionIndex];
 
-    const rawQuestions = Array.isArray(matchingSection?.questions) ? matchingSection.questions : [];
+      const title = String(rawSection.title ?? "").trim() || matchingQuestionType?.normalizedType || `Section ${sectionIndex + 1}`;
+      const instruction = String(rawSection.instruction ?? "").trim() || "Attempt all questions";
+      const rawQuestions = Array.isArray(rawSection.questions) ? rawSection.questions : [];
 
-    return {
-      title: questionType.normalizedType,
-      instruction: "Attempt all questions",
-      questions: rawQuestions
+      return {
+        title,
+        instruction,
+        questions: rawQuestions
         .map((question) =>
           sanitizeQuestion(
             question,
-            questionType.normalizedType,
-            questionType.marks,
-            sourceLines,
-            fullContext
+            title,
+            matchingQuestionType?.marks ?? 1,
+            buildDifficulty(sectionIndex)
           )
         )
         .filter((question): question is GeneratedQuestion => Boolean(question))
-    };
-  });
+      };
+    })
+    .filter((section) => section !== null);
 
   return { sections };
 };
@@ -419,45 +418,6 @@ const buildGroundedFallbackAssignment = (
         });
       })
     }))
-  };
-};
-
-const completeAssignmentWithFallback = (
-  assignment: GeneratedAssignment,
-  data: AssignmentGenerationInput,
-  sourceLines: string[]
-) => {
-  const config = normalizeAssignmentConfig(data);
-  const fallback = buildGroundedFallbackAssignment(data, sourceLines);
-
-  return {
-    sections: config.questionTypes.map<GeneratedSection>((questionType) => {
-      const currentSection = assignment.sections.find(
-        (section) => section.title.toLowerCase() === questionType.normalizedType.toLowerCase()
-      );
-      const fallbackSection = fallback.sections.find(
-        (section) => section.title.toLowerCase() === questionType.normalizedType.toLowerCase()
-      );
-
-      const questions = [...(currentSection?.questions ?? [])];
-
-      for (const fallbackQuestion of fallbackSection?.questions ?? []) {
-        if (questions.length >= questionType.count) {
-          break;
-        }
-
-        questions.push(fallbackQuestion);
-      }
-
-      return {
-        title: questionType.normalizedType,
-        instruction: "Attempt all questions",
-        questions: questions.slice(0, questionType.count).map((question) => ({
-          ...question,
-          marks: questionType.marks
-        }))
-      };
-    })
   };
 };
 
@@ -603,21 +563,19 @@ const callGemini = async (prompt: string) => {
 
 const tryParseAssignment = (
   rawText: string,
-  config: ReturnType<typeof normalizeAssignmentConfig>,
-  sourceLines: string[],
-  fullContext: string
+  config: ReturnType<typeof normalizeAssignmentConfig>
 ): GeneratedAssignment => {
   const sanitized = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
 
   try {
-    return sanitizeAssignment(JSON.parse(sanitized), config, sourceLines, fullContext);
+    return sanitizeAssignment(JSON.parse(sanitized), config);
   } catch {
     const jsonSubstringMatch = sanitized.match(/\{[\s\S]*\}/);
     if (!jsonSubstringMatch) {
       throw new Error("Unable to extract JSON substring from AI response");
     }
 
-    return sanitizeAssignment(JSON.parse(jsonSubstringMatch[0]), config, sourceLines, fullContext);
+    return sanitizeAssignment(JSON.parse(jsonSubstringMatch[0]), config);
   }
 };
 
@@ -700,13 +658,10 @@ export const generateQuestions = async (data: unknown): Promise<GeneratedAssignm
     }
 
     const config = normalizeAssignmentConfig(preparedInput);
-    const parsed = tryParseAssignment(rawResponse, config, sourceLines, limitedText);
-    const supportedOnly = parsed;
+    const parsed = tryParseAssignment(rawResponse, config);
 
-    const completed = completeAssignmentWithFallback(supportedOnly, preparedInput, sourceLines);
-
-    validateStructure(completed);
-    return validateGeneratedAssignment(completed, config);
+    validateStructure(parsed);
+    return parsed;
   } catch (error) {
     const message = toErrorMessage(error);
     console.error("[AI] Grounded generation failed", message);

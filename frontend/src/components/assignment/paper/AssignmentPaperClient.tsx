@@ -28,53 +28,11 @@ const hasStructuredSections = (result: AssignmentResult | null): result is Assig
   );
 };
 
-const FORBIDDEN_TEXT_PATTERNS = [/generate exactly/i, /question\s*\d+\s+for\s+the\s+subject/i];
-
-const containsForbiddenText = (value: string) => FORBIDDEN_TEXT_PATTERNS.some((pattern) => pattern.test(value));
-
-const cleanVisibleText = (value: string) =>
-  value
-    .split(/\r?\n/)
-    .filter((line) => !containsForbiddenText(line))
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-const sanitizeAssignmentResult = (result: AssignmentResult | null): AssignmentResult | null => {
-  if (!hasStructuredSections(result)) return null;
-
-  const sections = result.sections
-    .map((section) => ({
-      title: cleanVisibleText(section.title) || "Section A",
-      instruction: "Attempt all questions",
-      questions: section.questions
-        .map((question) => ({
-          ...question,
-          text: cleanVisibleText(question.text),
-          options: Array.isArray(question.options)
-            ? question.options.map((option) => cleanVisibleText(option)).filter(Boolean)
-            : undefined,
-        }))
-        .filter(
-          (question) =>
-            question.text.length > 0 &&
-            !containsForbiddenText(question.text)
-        ),
-    }))
-    .filter((section) => section.questions.length > 0);
-
-  if (sections.length === 0) {
-    return null;
-  }
-
-  return { sections };
-};
-
 export function AssignmentPaperClient({ id }: AssignmentPaperClientProps) {
   const router = useRouter();
   const { assignmentId, result, setAssignmentId, setResult } = useAssignmentStore();
-  const sanitizedCurrentResult = assignmentId === id ? sanitizeAssignmentResult(result) : null;
-  const hasCurrentResult = assignmentId === id && sanitizedCurrentResult !== null;
+  const currentResult = assignmentId === id && hasStructuredSections(result) ? result : null;
+  const hasCurrentResult = assignmentId === id && currentResult !== null;
 
   const [isWaiting, setIsWaiting] = useState(!hasCurrentResult);
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -102,7 +60,7 @@ export function AssignmentPaperClient({ id }: AssignmentPaperClientProps) {
 
         if (data.status === "completed" && data.result) {
           setErrorMessage(null);
-          setStoreResult(sanitizeAssignmentResult(data.result));
+          setStoreResult(hasStructuredSections(data.result) ? data.result : null);
           setIsWaiting(false);
         }
       } catch (err) {
@@ -136,7 +94,7 @@ export function AssignmentPaperClient({ id }: AssignmentPaperClientProps) {
         return;
       }
 
-      setResult(sanitizeAssignmentResult(payload.result ?? null));
+      setResult(hasStructuredSections(payload.result ?? null) ? (payload.result ?? null) : null);
       const latestAssignments = await getAssignments().catch(() => null);
       if (latestAssignments) {
         useAssignmentStore.getState().setAssignments(latestAssignments);
@@ -170,7 +128,7 @@ export function AssignmentPaperClient({ id }: AssignmentPaperClientProps) {
 
   return (
     <AssignmentOutputPage
-      result={hasCurrentResult ? sanitizedCurrentResult : null}
+      result={hasCurrentResult ? currentResult : null}
       isLoading={isWaiting || isRegenerating}
       errorMessage={errorMessage}
       onRegenerate={handleRegenerate}
