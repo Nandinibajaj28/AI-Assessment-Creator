@@ -18,7 +18,6 @@ type AssignmentOutputPageProps = {
   result: AssignmentResult | null;
   isLoading?: boolean;
   bannerText?: string;
-  errorMessage?: string | null;
   onRegenerate?: () => void;
 };
 
@@ -31,7 +30,6 @@ export function AssignmentOutputPage({
   result,
   isLoading = false,
   bannerText = "Here is your question paper!",
-  errorMessage = null,
   onRegenerate,
 }: AssignmentOutputPageProps) {
   const router = useRouter();
@@ -103,13 +101,6 @@ export function AssignmentOutputPage({
                   ) : null}
                 </div>
               </div>
-
-              {errorMessage ? (
-                <div className="mt-[12px] rounded-[18px] border border-[#fecaca] bg-[#fff1f2] px-[16px] py-[14px] text-[12px] text-[#9f1239] shadow-[0_12px_26px_rgba(127,29,29,0.08)] md:text-[13px]">
-                  {errorMessage}
-                </div>
-              ) : null}
-
               <div className="mt-[10px] md:mt-[12px]">
                 <ExamPaper
                   result={result}
