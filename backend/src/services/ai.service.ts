@@ -339,7 +339,7 @@ function sanitizeQuestion(
   }
 
   const raw = question as Record<string, unknown>;
-  const text = String(raw.text ?? "").trim();
+  const text = sanitizeQuestionText(String(raw.text ?? ""));
   const difficultyValue = String(raw.difficulty ?? "").trim().toLowerCase();
   const difficulty = ["easy", "medium", "hard"].includes(difficultyValue)
     ? (difficultyValue as GeneratedQuestion["difficulty"])
@@ -373,6 +373,14 @@ function sanitizeQuestion(
       }),
     ...(options ? { options } : {})
   };
+}
+
+function sanitizeQuestionText(value: string) {
+  return value
+    .replace(/\bsource\s*line\s*:\s*/gi, "")
+    .replace(/\s*\(\s*source\s*:\s*[^)]+\)\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function buildGroundedFallbackAssignment(
